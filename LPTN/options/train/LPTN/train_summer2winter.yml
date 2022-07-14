@@ -1,0 +1,118 @@
+# general settings
+name: train
+model_type: LPTNModel
+num_gpu: 1  # set num_gpu: 0 for cpu mode
+manual_seed: 42
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: summer2winter
+    type: UnPairedImageDataset
+
+    # (for lmdb)
+    dataroot_gt: /home/jijang/projects/Drone/LPTN/datasets/lmdb/summer2winter/train_winter.lmdb
+    dataroot_lq: /home/jijang/projects/Drone/LPTN/datasets/lmdb/summer2winter/train_summer.lmdb
+
+    io_backend:
+      type: lmdb
+
+    if_fix_size: true # training will be slower if the data shape not fixed (both num_gpu and batch_size need to be 1)
+    gt_size: 256 # training size
+    use_flip: true
+    use_rot: true
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 8
+    batch_size_per_gpu: 8
+    dataset_enlarge_ratio: 100
+    prefetch_mode: cuda
+    pin_memory: true
+
+  val:
+    name: summer2winter_val
+    type: UnPairedImageDataset
+    dataroot_gt: /home/jijang/projects/Drone/LPTN/datasets/lmdb/summer2winter/test_winter.lmdb
+    dataroot_lq: /home/jijang/projects/Drone/LPTN/datasets/lmdb/summer2winter/test_summer_with_our_data.lmdb
+    io_backend:
+      type: lmdb
+
+# network structures
+network_g:
+  type: LPTN
+  nrb_low: 5
+  nrb_high: 3
+  num_high: 3
+
+network_d:
+  type: Discriminator
+
+# path
+path:
+  pretrain_network_g: ~
+  strict_load_g: false
+  resume_state: ~
+
+# training settings
+train:
+  optim_g:
+    type: Adam
+    lr: !!float 1e-6 # !!float 1e-4
+    weight_decay: 0
+    betas: [0.9, 0.99]
+  optim_d:
+    type: Adam
+    lr: !!float 1e-4
+    weight_decay: 0
+    betas: [ 0.9, 0.99 ]
+
+  scheduler:
+    type: MultiStepLR
+    milestones: [50000, 100000, 200000, 3000000]
+    gamma: 0.5
+
+  total_iter: 3000000
+  warmup_iter: -1  # no warm up
+
+  # losses
+  pixel_opt:
+    type: MSELoss
+    loss_weight: 1000
+    reduction: mean
+  gan_opt:
+    type: GANLoss
+    gan_type: standard
+    real_label_val: 1.0
+    fake_label_val: 0.0
+    loss_weight: 1
+  gp_opt:
+    loss_weight: 100
+
+  net_d_iters: 1
+  net_d_init_iters: 0
+
+# validation settings
+val:
+  val_freq: !!float 1e5
+  save_img: true
+
+  metrics:
+    psnr:
+      type: calculate_psnr
+      crop_border: 4
+      test_y_channel: false
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 1e5
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
